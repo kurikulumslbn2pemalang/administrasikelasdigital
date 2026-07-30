@@ -1,0 +1,1075 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Administrasi Kelas Digital</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Vue 3 -->
+    <script src="https://unpkg.com/vue@3/dist/vue.global.js"></script>
+    <!-- SheetJS (Excel) -->
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+    <!-- html2pdf.js (PDF) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+    <style>
+        @media print {
+            @page { margin: 0; }
+            body * {
+                visibility: hidden;
+            }
+            #printable-content, #printable-content * {
+                visibility: visible;
+            }
+            #printable-content {
+                position: absolute;
+                left: 0;
+                top: 0;
+                width: 100%;
+                margin: 0;
+                padding: 1cm;
+                box-shadow: none !important;
+                border: none !important;
+            }
+            /* Optimalkan tabel untuk print */
+            table { page-break-inside: auto; width: 100% !important; border-collapse: collapse; }
+            tr    { page-break-inside: avoid; page-break-after: auto; }
+            thead { display: table-header-group; }
+            tfoot { display: table-footer-group; }
+            .overflow-x-auto { overflow: visible !important; }
+        }
+    </style>
+</head>
+<body class="bg-slate-100 font-sans text-slate-800">
+
+    <div id="app">
+
+        <!-- PAGE LOGIN -->
+        <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900">
+            <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-indigo-100">
+                <div class="text-center mb-6">
+                    <!-- LOGO SEKOLAH (Dukungan format .jpg/.jpeg/.png dengan relative path & fallback) -->
+                    <img src="./logo.jpg" alt="Logo Sekolah" class="w-24 h-24 mx-auto mb-3 object-contain" 
+                         onerror="if (this.src.endsWith('logo.jpg')) { this.src='./logo.png'; } else if (this.src.endsWith('logo.png')) { this.src='./logo.jpeg'; } else { this.onerror=null; this.outerHTML='<div class='w-16 h-16 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold'>👨‍🏫</div>'; }">
+                    <h1 class="text-2xl font-bold text-slate-800">Administrasi Kelas Digital</h1>
+                    <p class="text-sm text-indigo-600 font-semibold mt-1"></p>
+                </div>
+
+                <form @submit.prevent="login" class="space-y-4">
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">Username / Nama Guru</label>
+                        <input type="text" v-model="loginUsername" placeholder="Ketik Nama/Username..." class="w-full bg-slate-50 border border-slate-300 rounded-lg p-3 text-sm font-semibold text-slate-700 focus:ring-2 focus:ring-indigo-500 focus:bg-white" required>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold uppercase tracking-wider text-slate-600 mb-1">PIN Akses</label>
+                        <input type="password" v-model="loginPin" maxlength="4" placeholder="Masukkan PIN..." class="w-full border border-slate-300 rounded-lg p-3 text-center text-lg font-bold tracking-widest focus:ring-2 focus:ring-indigo-500 focus:border-indigo-500 bg-white" required autofocus>
+                    </div>
+
+                    <p v-if="loginError" class="text-xs text-rose-600 font-semibold text-center mt-2">{{ loginError }}</p>
+
+                    <button type="submit" class="w-full bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-3 rounded-lg shadow-md transition text-sm">
+                        🔓 Masuk Akun Saya
+                    </button>
+                </form>
+
+                <div class="mt-4 p-3 bg-indigo-50 rounded-lg text-xs text-indigo-800 border border-indigo-100">
+                    💡 <strong>Info:</strong> Input nama anda dengan benar jika akun sudah dibuat tidak akan bisa dirubah.
+                </div>
+
+                <div class="mt-6 pt-4 border-t border-slate-200 text-center">
+                    <p class="text-xs text-slate-500 font-medium">
+                        Created and modified by <span class="font-semibold text-slate-700">Mohammad Trihatmodjo</span> copyright 2026
+                    </p>
+                </div>
+            </div>
+        </div>
+
+        <!-- PAGE UTAMA ADMINISTRASI (SETELAH LOGIN) -->
+        <div v-else class="max-w-7xl mx-auto p-4 md:p-6">
+            
+            <!-- Header Utama -->
+            <header class="flex flex-col md:flex-row justify-between items-center mb-6 bg-indigo-900 text-white p-6 rounded-xl shadow-lg">
+                <div>
+                    <h1 class="text-2xl font-bold">Administrasi Kelas Digital</h1>
+                    <p class="text-indigo-200 text-sm">Guru / User: <span class="font-bold text-white">{{ profilGuru.nama }}</span> <span class="text-xs bg-indigo-700 px-2 py-0.5 rounded ml-2">@{{ currentUsername }}</span></p>
+                </div>
+                <div class="mt-4 md:mt-0 flex flex-wrap gap-2 items-center">
+                    <button @click="logout" class="bg-slate-700 hover:bg-slate-800 text-white font-medium px-3 py-2 rounded-lg text-sm shadow transition ml-2">
+                        🚪 Keluar
+                    </button>
+                </div>
+            </header>
+
+            <!-- Navigation Tabs -->
+            <div class="flex border-b border-slate-300 mb-6 space-x-2 overflow-x-auto bg-white p-2 rounded-t-xl shadow-sm">
+                <button @click="activeTab = 'absensi_harian'" :class="activeTab === 'absensi_harian' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    📋 Presensi Harian
+                </button>
+                <button @click="activeTab = 'jurnal_input'" :class="activeTab === 'jurnal_input' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    ✏️ Jurnal Mengajar Harian
+                </button>
+                <button @click="activeTab = 'rekap_absensi'" :class="activeTab === 'rekap_absensi' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    📅 Rekap Presensi Bulanan
+                </button>
+                <button @click="activeTab = 'rekap_jurnal'" :class="activeTab === 'rekap_jurnal' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    📖 Jurnal Mengajar Bulanan
+                </button>
+                <button @click="activeTab = 'input_nilai'" :class="activeTab === 'input_nilai' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    📝 Input Nilai
+                </button>
+                <button @click="activeTab = 'data_siswa'" :class="activeTab === 'data_siswa' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    👨‍🎓 Data Siswa
+                </button>
+                <button @click="activeTab = 'pengaturan'" :class="activeTab === 'pengaturan' ? 'border-indigo-600 text-indigo-600 font-bold bg-indigo-50' : 'text-slate-500 hover:text-slate-700'" class="py-2.5 px-4 border-b-2 rounded-t-lg transition whitespace-nowrap">
+                    ⚙️ Pengaturan & TTD
+                </button>
+            </div>
+
+            <!-- Content Area -->
+            <div id="printable-content" class="bg-white p-6 rounded-xl shadow-md border border-slate-200">
+
+                <!-- Custom Watermark Print -->
+                <div class="hidden print:block text-left text-xs font-bold text-slate-500 mb-6">
+                    Administrasi Kelas Digital Copyright 2026
+                </div>
+
+                <!-- TAB 1: PRESENSI HARIAN -->
+                <div v-if="activeTab === 'absensi_harian'">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800">Presensi Kehadiran Siswa</h2>
+                            <p class="text-sm text-indigo-800 font-semibold">{{ formattedDate(selectedDateAbsensi) }}</p>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            <label class="text-sm font-semibold text-slate-600">Pilih Tanggal:</label>
+                            <input type="date" v-model="selectedDateAbsensi" class="border border-slate-300 rounded-lg p-2 text-sm bg-white shadow-sm">
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-left border-collapse border border-slate-200">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 uppercase text-xs">
+                                    <th class="p-3 border text-center w-12">No</th>
+                                    <th class="p-3 border">Nama Siswa</th>
+                                    <th class="p-3 border w-48">Status Kehadiran</th>
+                                    <th class="p-3 border">Keterangan / Catatan</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(siswa, index) in muridData" :key="siswa.id" class="hover:bg-slate-50">
+                                    <td class="p-3 border text-center font-medium">{{ index + 1 }}</td>
+                                    <td class="p-3 border font-semibold text-slate-800">{{ siswa.nama }}</td>
+                                    <td class="p-3 border">
+                                        <select v-model="getAbsensi(selectedDateAbsensi, siswa.id).status" class="w-full bg-white border border-slate-300 rounded p-1.5 text-sm focus:ring-indigo-500">
+                                            <option value="H">🟢 Hadir (H)</option>
+                                            <option value="I">🟡 Izin (I)</option>
+                                            <option value="S">🔵 Sakit (S)</option>
+                                            <option value="A">🔴 Alpa (A)</option>
+                                        </select>
+                                    </td>
+                                    <td class="p-3 border">
+                                        <input type="text" v-model="getAbsensi(selectedDateAbsensi, siswa.id).catatan" placeholder="Catatan (opsional)" class="w-full border border-slate-200 rounded p-1.5 text-sm">
+                                    </td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex justify-end pt-2 border-t">
+                        <button @click="simpanPresensi" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
+                            💾 Simpan Presensi Hari Ini
+                        </button>
+                    </div>
+
+                    <div class="mt-12 flex justify-end">
+                        <div class="text-center w-64">
+                            <p class="text-sm text-slate-600">{{ profilGuru.kota }}, {{ formattedDate(selectedDateAbsensi) }}</p>
+                            <p class="text-sm font-semibold text-slate-700 mb-2">{{ profilGuru.jabatan }}</p>
+                            <div class="h-20 flex justify-center items-center my-1">
+                                <img v-if="profilGuru.ttdUrl" :src="profilGuru.ttdUrl" alt="TTD Guru" class="max-h-20 max-w-full">
+                                <div v-else class="text-xs text-slate-400 italic">(Tanda Tangan Digital)</div>
+                            </div>
+                            <p class="font-bold underline text-slate-800">{{ profilGuru.nama }}</p>
+                            <p class="text-xs text-slate-600">NIP. {{ profilGuru.nip || '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 2: JURNAL HARIAN (INPUT & CEK) -->
+                <div v-if="activeTab === 'jurnal_input'">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100 print:bg-transparent print:border-none print:p-0 print:block print:text-center">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800 print:text-2xl">Jurnal Mengajar Harian</h2>
+                            <p class="text-sm text-indigo-800 font-semibold print:hidden">{{ formattedDate(selectedDateJurnal) }}</p>
+                            <p class="hidden print:block text-lg font-bold text-slate-900 mt-2">{{ formattedDate(selectedDateJurnal) }}</p>
+                        </div>
+                        <div class="flex items-center gap-2 print:hidden">
+                            <label class="text-sm font-semibold text-slate-600">Pilih Tanggal Mengajar:</label>
+                            <input type="date" v-model="selectedDateJurnal" class="border border-slate-300 rounded-lg p-2 text-sm bg-white shadow-sm">
+                        </div>
+                    </div>
+
+                    <div class="mb-6 bg-slate-50 p-4 rounded-xl border border-slate-200 print:hidden">
+                        <label class="block text-sm font-bold text-slate-700 mb-2">Pilih / Tambah Mapel yang Diajarkan Hari Ini:</label>
+                        <div class="flex flex-wrap gap-2">
+                            <button v-for="mapel in daftarMapel" :key="mapel" @click="toggleMapelSelection(mapel)"
+                                :class="isMapelSelected(mapel) ? 'bg-indigo-600 text-white font-bold shadow-md' : 'bg-white text-slate-700 border hover:bg-slate-100'"
+                                class="px-4 py-2 rounded-lg text-sm transition flex items-center gap-1.5">
+                                <span>{{ isMapelSelected(mapel) ? '✓' : '+' }}</span>
+                                <span>{{ mapel }}</span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="space-y-6">
+                        <div v-for="mapel in selectedMapelHariIni" :key="mapel" class="p-5 border rounded-xl shadow-sm break-inside-avoid" :class="jurnalIsFilled(selectedDateJurnal, mapel) ? 'bg-emerald-50 border-emerald-200' : 'bg-white border-slate-300'">
+                            <div class="flex justify-between items-center mb-3 border-b pb-2">
+                                <h3 class="font-bold text-lg" :class="jurnalIsFilled(selectedDateJurnal, mapel) ? 'text-emerald-900' : 'text-indigo-900'">📖 Mata Pelajaran: {{ mapel }} <span v-if="jurnalIsFilled(selectedDateJurnal, mapel)" class="text-xs ml-2 text-emerald-700 bg-emerald-100 px-2 py-1 rounded-full print:hidden">Tersimpan</span></h3>
+                                <div class="flex gap-2 print:hidden">
+                                    <button v-if="jurnalIsFilled(selectedDateJurnal, mapel) && !isEditingJurnal(mapel)" @click="setEditingJurnal(mapel, true)" class="text-xs text-white bg-indigo-600 hover:bg-indigo-700 px-3 py-1.5 rounded shadow transition">
+                                        ✏️ Edit
+                                    </button>
+                                    <button v-if="isEditingJurnal(mapel) && jurnalIsFilled(selectedDateJurnal, mapel)" @click="setEditingJurnal(mapel, false)" class="text-xs text-slate-600 bg-slate-200 hover:bg-slate-300 px-3 py-1.5 rounded shadow transition">
+                                        ✕ Batal Edit
+                                    </button>
+                                    <button @click="hapusJurnal(mapel, true, selectedDateJurnal)" class="text-xs text-white bg-rose-600 hover:bg-rose-700 px-3 py-1.5 rounded shadow transition flex-inline items-center gap-1">
+                                        🗑️ Hapus
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1 print:hidden">Tujuan Pembelajaran (TP):</label>
+                                    <span class="hidden print:block font-bold text-xs text-slate-500 uppercase mb-1">Tujuan Pembelajaran (TP):</span>
+                                    <textarea v-if="isEditingJurnal(mapel)" v-model="getJurnal(selectedDateJurnal, mapel).tp" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-indigo-500 print:hidden" placeholder="Ketik Tujuan Pembelajaran hari ini..."></textarea>
+                                    <p v-else class="text-slate-800 bg-white p-3 rounded border border-slate-200 text-sm print:border-none print:p-0">{{ getJurnal(selectedDateJurnal, mapel).tp || '-' }}</p>
+                                </div>
+                                <div>
+                                    <label class="block text-xs font-bold text-slate-700 mb-1 print:hidden">Materi & Ringkasan Pembelajaran:</label>
+                                    <span class="hidden print:block font-bold text-xs text-slate-500 uppercase mb-1">Materi Pembelajaran:</span>
+                                    <textarea v-if="isEditingJurnal(mapel)" v-model="getJurnal(selectedDateJurnal, mapel).materi" rows="3" class="w-full p-2.5 border border-slate-300 rounded-lg text-sm bg-slate-50 focus:bg-white focus:ring-indigo-500 print:hidden" placeholder="Ketik materi yang diajarkan..."></textarea>
+                                    <p v-else class="text-slate-800 bg-white p-3 rounded border border-slate-200 text-sm print:border-none print:p-0">{{ getJurnal(selectedDateJurnal, mapel).materi || '-' }}</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <div v-if="selectedMapelHariIni.length === 0" class="p-8 text-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 text-slate-500 print:hidden">
+                            <p class="font-semibold">Klik Mapel di atas untuk mulai mengisi atau melihat jurnal hari ini.</p>
+                        </div>
+
+                        <div v-else class="flex justify-end pt-2 print:hidden">
+                            <button @click="simpanJurnal" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
+                                💾 Simpan Jurnal
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TTD Laporan -->
+                    <div v-if="selectedMapelHariIni.length > 0" class="mt-12 flex justify-end hidden print:flex">
+                        <div class="text-center w-64">
+                            <p class="text-sm text-slate-600">{{ profilGuru.kota }}, {{ formattedDate(selectedDateJurnal) }}</p>
+                            <p class="text-sm font-semibold text-slate-700 mb-2">{{ profilGuru.jabatan }}</p>
+                            <div class="h-20 flex justify-center items-center my-1">
+                                <img v-if="profilGuru.ttdUrl" :src="profilGuru.ttdUrl" alt="TTD Guru" class="max-h-20 max-w-full">
+                                <div v-else class="text-xs text-slate-400 italic">(Tanda Tangan Digital)</div>
+                            </div>
+                            <p class="font-bold underline text-slate-800">{{ profilGuru.nama }}</p>
+                            <p class="text-xs text-slate-600">NIP. {{ profilGuru.nip || '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 4: REKAP PRESENSI BULANAN -->
+                <div v-if="activeTab === 'rekap_absensi'">
+                    <div class="flex justify-between items-center mb-6 print:block print:text-center">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800 print:text-2xl">Rekap Presensi Murid Bulanan</h2>
+                            <p class="text-sm text-slate-500 print:hidden">Periode Bulan: {{ formatBulanTahun(selectedMonth) }}</p>
+                            <p class="hidden print:block text-lg font-bold text-slate-900 mt-2">Bulan: {{ formatBulanTahun(selectedMonth) }}</p>
+                        </div>
+                        <input type="month" v-model="selectedMonth" class="border border-slate-300 rounded p-2 text-sm bg-white print:hidden">
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-xs text-left border-collapse border border-slate-300">
+                            <thead>
+                                <tr class="bg-slate-100 text-center">
+                                    <th class="p-2 border" rowspan="2">No</th>
+                                    <th class="p-2 border" rowspan="2">Nama Siswa</th>
+                                    <th class="p-2 border" rowspan="2">NIS/NISN</th>
+                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d">{{ d }}</th>
+                                    <th class="p-1 border bg-emerald-100" colspan="4">Total</th>
+                                </tr>
+                                <tr class="bg-slate-50 text-center">
+                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d"></th>
+                                    <th class="p-1 border bg-emerald-50">H</th>
+                                    <th class="p-1 border bg-blue-50">S</th>
+                                    <th class="p-1 border bg-yellow-50">I</th>
+                                    <th class="p-1 border bg-red-50">A</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(siswa, idx) in muridData" :key="siswa.id" class="text-center hover:bg-slate-50">
+                                    <td class="p-2 border font-medium">{{ idx + 1 }}</td>
+                                    <td class="p-2 border text-left font-semibold text-slate-800">{{ siswa.nama }}</td>
+                                    <td class="p-2 border text-left text-[10px] text-slate-500">{{ siswa.nis || '-' }} / {{ siswa.nisn || '-' }}</td>
+                                    <td v-for="d in daysInMonth" :key="d" class="p-1 border">
+                                        {{ getStatusByDay(d, siswa.id) }}
+                                    </td>
+                                    <td class="p-1 border font-bold text-emerald-700 bg-emerald-50">{{ hitungTotalSiswa(siswa.id, 'H') }}</td>
+                                    <td class="p-1 border font-bold text-blue-700 bg-blue-50">{{ hitungTotalSiswa(siswa.id, 'S') }}</td>
+                                    <td class="p-1 border font-bold text-yellow-700 bg-yellow-50">{{ hitungTotalSiswa(siswa.id, 'I') }}</td>
+                                    <td class="p-1 border font-bold text-red-700 bg-red-50">{{ hitungTotalSiswa(siswa.id, 'A') }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-12 flex justify-end">
+                        <div class="text-center w-64">
+                            <p class="text-sm text-slate-600">{{ profilGuru.kota }}, {{ formattedTodayDate }}</p>
+                            <p class="text-sm font-semibold text-slate-700 mb-2">{{ profilGuru.jabatan }}</p>
+                            <div class="h-20 flex justify-center items-center my-1">
+                                <img v-if="profilGuru.ttdUrl" :src="profilGuru.ttdUrl" class="max-h-20">
+                                <div v-else class="text-xs text-slate-400 italic">(Tanda Tangan Digital)</div>
+                            </div>
+                            <p class="font-bold underline text-slate-800">{{ profilGuru.nama }}</p>
+                            <p class="text-xs text-slate-600">NIP. {{ profilGuru.nip || '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 5: REKAP JURNAL BULANAN -->
+                <div v-if="activeTab === 'rekap_jurnal'">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 print:block print:text-center">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800 print:text-2xl">Rekap Jurnal Mengajar Bulanan</h2>
+                            <p class="text-sm text-slate-500 print:hidden">Hasil rekapan otomatis per hari dari input jurnal harian</p>
+                            <p class="hidden print:block text-lg font-bold text-slate-900 mt-2">Bulan: {{ formatBulanTahun(selectedMonthJurnal) }}</p>
+                            <p class="hidden print:block text-md font-bold text-slate-800" v-if="selectedMapelJurnal !== 'SEMUA'">Mata Pelajaran: {{ selectedMapelJurnal }}</p>
+                        </div>
+                        <div class="flex gap-2 print:hidden">
+                            <input type="month" v-model="selectedMonthJurnal" class="border border-slate-300 rounded p-2 text-sm bg-white">
+                            <select v-model="selectedMapelJurnal" class="border border-slate-300 rounded p-2 text-sm bg-white font-semibold text-indigo-700">
+                                <option value="SEMUA">-- Semua Mata Pelajaran --</option>
+                                <option v-for="m in daftarMapel" :key="m" :value="m">{{ m }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse border border-slate-300">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 text-xs uppercase">
+                                    <th class="p-3 border w-32">Tanggal</th>
+                                    <th class="p-3 border w-44">Mata Pelajaran</th>
+                                    <th class="p-3 border">Tujuan Pembelajaran (TP)</th>
+                                    <th class="p-3 border">Materi / Ringkasan Pembelajaran</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="j in daftarJurnalBulanan" :key="j.tanggal + j.mapel" class="hover:bg-slate-50 text-sm">
+                                    <td class="p-3 border font-medium whitespace-nowrap bg-slate-50">{{ j.tanggal }}</td>
+                                    <td class="p-3 border font-semibold text-indigo-800">{{ j.mapel }}</td>
+                                    <td class="p-3 border">{{ j.tp || '-' }}</td>
+                                    <td class="p-3 border">{{ j.materi || '-' }}</td>
+                                </tr>
+                                <tr v-if="daftarJurnalBulanan.length === 0">
+                                    <td colspan="4" class="p-6 text-center text-slate-400 italic">Belum ada jurnal terisi untuk periode bulan ini.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="mt-12 flex justify-end">
+                        <div class="text-center w-64">
+                            <p class="text-sm text-slate-600">{{ profilGuru.kota }}, {{ formattedTodayDate }}</p>
+                            <p class="text-sm font-semibold text-slate-700 mb-2">{{ profilGuru.jabatan }}</p>
+                            <div class="h-20 flex justify-center items-center my-1">
+                                <img v-if="profilGuru.ttdUrl" :src="profilGuru.ttdUrl" class="max-h-20">
+                                <div v-else class="text-xs text-slate-400 italic">(Tanda Tangan Digital)</div>
+                            </div>
+                            <p class="font-bold underline text-slate-800">{{ profilGuru.nama }}</p>
+                            <p class="text-xs text-slate-600">NIP. {{ profilGuru.nip || '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: INPUT NILAI -->
+                <div v-if="activeTab === 'input_nilai'">
+                    <div class="flex flex-col md:flex-row justify-between items-start md:items-center mb-6 gap-4 bg-indigo-50 p-4 rounded-lg border border-indigo-100 print:bg-transparent print:border-none print:p-0 print:block print:text-center">
+                        <div>
+                            <h2 class="text-xl font-bold text-slate-800 print:text-2xl">📝 Input Nilai Ulangan & Sumatif</h2>
+                            <p class="text-sm text-indigo-800 font-semibold print:hidden">Semester {{ selectedSemesterNilai }} - {{ selectedMapelNilai }}</p>
+                            <p class="hidden print:block text-lg font-bold text-slate-900 mt-2">Semester {{ selectedSemesterNilai }} - Mata Pelajaran: {{ selectedMapelNilai }}</p>
+                        </div>
+                        <div class="flex items-center gap-2 print:hidden">
+                            <label class="text-sm font-semibold text-slate-600">Semester:</label>
+                            <select v-model="selectedSemesterNilai" class="border border-slate-300 rounded-lg p-2 text-sm bg-white shadow-sm font-bold text-indigo-700 mr-2">
+                                <option value="1">Semester 1</option>
+                                <option value="2">Semester 2</option>
+                            </select>
+                            <label class="text-sm font-semibold text-slate-600">Mapel:</label>
+                            <select v-model="selectedMapelNilai" class="border border-slate-300 rounded-lg p-2 text-sm bg-white shadow-sm font-bold text-indigo-700">
+                                <option v-for="m in daftarMapel" :key="m" :value="m">{{ m }}</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <div class="overflow-x-auto mb-6">
+                        <table class="w-full text-center border-collapse border border-slate-200">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700 text-xs">
+                                    <th class="p-2 border w-12 uppercase">No</th>
+                                    <th class="p-2 border text-left uppercase w-48">Nama Siswa</th>
+                                    <th class="p-2 border">UH 1</th>
+                                    <th class="p-2 border">UH 2</th>
+                                    <th class="p-2 border">UH 3</th>
+                                    <th class="p-2 border">UH 4</th>
+                                    <th class="p-2 border">UH 5</th>
+                                    <th class="p-2 border bg-indigo-50">Rata UH</th>
+                                    <th class="p-2 border bg-amber-50">STS</th>
+                                    <th v-if="selectedSemesterNilai === '1'" class="p-2 border bg-emerald-50 text-emerald-800 uppercase">SAS</th>
+                                    <th v-if="selectedSemesterNilai === '2'" class="p-2 border bg-emerald-50 text-emerald-800 uppercase">ASAJ</th>
+                                    <th class="p-2 border bg-indigo-600 text-white uppercase">NA</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(siswa, index) in muridData" :key="siswa.id" class="hover:bg-slate-50 text-sm">
+                                    <td class="p-2 border font-medium">{{ index + 1 }}</td>
+                                    <td class="p-2 border text-left font-semibold text-slate-800">{{ siswa.nama }}</td>
+                                    <td class="p-2 border"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).uh1" class="w-16 border rounded p-1 text-center text-sm focus:ring-indigo-500"></td>
+                                    <td class="p-2 border"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).uh2" class="w-16 border rounded p-1 text-center text-sm focus:ring-indigo-500"></td>
+                                    <td class="p-2 border"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).uh3" class="w-16 border rounded p-1 text-center text-sm focus:ring-indigo-500"></td>
+                                    <td class="p-2 border"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).uh4" class="w-16 border rounded p-1 text-center text-sm focus:ring-indigo-500"></td>
+                                    <td class="p-2 border"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).uh5" class="w-16 border rounded p-1 text-center text-sm focus:ring-indigo-500"></td>
+                                    <td class="p-2 border bg-indigo-50 font-bold text-indigo-800">{{ hitungRataUH(siswa.id) }}</td>
+                                    <td class="p-2 border bg-amber-50/30"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).sts" class="w-16 border border-amber-300 rounded p-1 text-center text-sm font-semibold focus:ring-amber-500"></td>
+                                    <td v-if="selectedSemesterNilai === '1'" class="p-2 border bg-emerald-50/30"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).sas" class="w-16 border border-emerald-300 rounded p-1 text-center text-sm font-semibold focus:ring-emerald-500"></td>
+                                    <td v-if="selectedSemesterNilai === '2'" class="p-2 border bg-emerald-50/30"><input type="number" min="0" max="100" v-model="getNilai(siswa.id).asaj" class="w-16 border border-emerald-300 rounded p-1 text-center text-sm font-semibold focus:ring-emerald-500"></td>
+                                    <td class="p-2 border bg-indigo-100 font-bold text-indigo-900">{{ hitungNilaiAkhir(siswa.id) }}</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+
+                    <div class="flex justify-end pt-2 border-t">
+                        <button @click="simpanNilai" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
+                            💾 Simpan Nilai
+                        </button>
+                    </div>
+
+                    <div class="mt-12 flex justify-end">
+                        <div class="text-center w-64">
+                            <p class="text-sm text-slate-600">{{ profilGuru.kota }}, {{ formattedTodayDate }}</p>
+                            <p class="text-sm font-semibold text-slate-700 mb-2">{{ profilGuru.jabatan }}</p>
+                            <div class="h-20 flex justify-center items-center my-1">
+                                <img v-if="profilGuru.ttdUrl" :src="profilGuru.ttdUrl" alt="TTD Guru" class="max-h-20 max-w-full">
+                                <div v-else class="text-xs text-slate-400 italic">(Tanda Tangan Digital)</div>
+                            </div>
+                            <p class="font-bold underline text-slate-800">{{ profilGuru.nama }}</p>
+                            <p class="text-xs text-slate-600">NIP. {{ profilGuru.nip || '-' }}</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB 6: PENGATURAN PROFIL & TTD -->
+                <div v-if="activeTab === 'pengaturan'" class="max-w-2xl">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4">Pengaturan Profil Guru & Tanda Tangan</h2>
+                    <div class="space-y-4 bg-slate-50 p-6 rounded-xl border border-slate-200">
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Nama Lengkap Guru & Gelar:</label>
+                            <input type="text" v-model="profilGuru.nama" @input="simpanProfil" class="w-full border p-2 rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">NIP (Opsional):</label>
+                            <input type="text" v-model="profilGuru.nip" @input="simpanProfil" class="w-full border p-2 rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Jabatan / Kelas:</label>
+                            <input type="text" v-model="profilGuru.jabatan" @input="simpanProfil" class="w-full border p-2 rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Kota / Kabupaten:</label>
+                            <input type="text" v-model="profilGuru.kota" @input="simpanProfil" class="w-full border p-2 rounded text-sm bg-white">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-semibold text-slate-700 mb-1">Upload Gambar Tanda Tangan Digital (PNG/JPG):</label>
+                            <input type="file" @change="uploadTTD" accept="image/*" class="w-full text-sm">
+                        </div>
+                        <div class="pt-2">
+                            <button @click="simpanProfil(true)" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2 rounded-lg shadow-md transition">
+                                💾 Simpan Pengaturan
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB DATA SISWA -->
+                <div v-if="activeTab === 'data_siswa'" class="max-w-4xl">
+                    <h2 class="text-xl font-bold text-slate-800 mb-4">Kelola Data Siswa</h2>
+                    <div class="bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-6">
+                        <h3 class="font-bold text-indigo-900 mb-3">{{ formSiswa.isEdit ? 'Edit Data Siswa' : 'Tambah Siswa Baru' }}</h3>
+                        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+                            <input type="text" v-model="formSiswa.nama" placeholder="Nama Lengkap" class="border p-2 rounded text-sm bg-white" required>
+                            <input type="text" v-model="formSiswa.nis" placeholder="NIS" class="border p-2 rounded text-sm bg-white">
+                            <input type="text" v-model="formSiswa.nisn" placeholder="NISN" class="border p-2 rounded text-sm bg-white">
+                            <button @click="simpanSiswa" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold py-2 px-4 rounded text-sm shadow">
+                                {{ formSiswa.isEdit ? '💾 Update Siswa' : '➕ Tambah Siswa' }}
+                            </button>
+                        </div>
+                        <button v-if="formSiswa.isEdit" @click="resetFormSiswa" class="text-xs text-slate-500 hover:text-slate-700 font-medium">Batal Edit</button>
+                    </div>
+
+                    <div class="overflow-x-auto">
+                        <table class="w-full text-left border-collapse border border-slate-200 text-sm">
+                            <thead>
+                                <tr class="bg-slate-100 text-slate-700">
+                                    <th class="p-3 border w-12 text-center">No</th>
+                                    <th class="p-3 border">Nama Lengkap</th>
+                                    <th class="p-3 border w-24">NIS</th>
+                                    <th class="p-3 border w-32">NISN</th>
+                                    <th class="p-3 border w-32 text-center">Aksi</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <tr v-for="(siswa, idx) in muridData" :key="siswa.id" class="hover:bg-slate-50">
+                                    <td class="p-3 border text-center font-medium">{{ idx + 1 }}</td>
+                                    <td class="p-3 border font-semibold">{{ siswa.nama }}</td>
+                                    <td class="p-3 border text-slate-600">{{ siswa.nis || '-' }}</td>
+                                    <td class="p-3 border text-slate-600">{{ siswa.nisn || '-' }}</td>
+                                    <td class="p-3 border text-center space-x-2">
+                                        <button @click="editSiswa(siswa)" class="text-indigo-600 hover:text-indigo-800 font-bold">Edit</button>
+                                        <button @click="hapusSiswa(siswa.id)" class="text-rose-600 hover:text-rose-800 font-bold">Hapus</button>
+                                    </td>
+                                </tr>
+                                <tr v-if="muridData.length === 0">
+                                    <td colspan="5" class="p-6 text-center text-slate-500 italic">Belum ada data siswa. Silakan tambah siswa.</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+            </div>
+
+            <!-- Action Buttons Footer -->
+            <div v-if="activeTab !== 'pengaturan' && activeTab !== 'data_siswa'" class="mt-4 flex flex-wrap justify-end gap-2">
+                <button @click="loadUserData(true)" class="bg-amber-500 hover:bg-amber-600 text-white font-medium px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-1">
+                    🔄 Refresh Data
+                </button>
+                <button @click="exportToExcel" class="bg-emerald-600 hover:bg-emerald-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-1">
+                    📊 Export Excel
+                </button>
+                <button @click="exportToPDF" class="bg-rose-600 hover:bg-rose-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-1">
+                    📄 Cetak PDF
+                </button>
+                <button @click="printDocument" class="bg-blue-600 hover:bg-blue-700 text-white font-medium px-4 py-2.5 rounded-lg text-sm shadow transition flex items-center gap-1">
+                    🖨️ Cetak Dokumen
+                </button>
+            </div>
+
+            <!-- Footer Border -->
+            <footer class="mt-8 pt-4 border-t border-slate-300 text-center">
+                <p class="text-xs text-slate-500 font-medium tracking-wide">
+                    created and modified by <span class="font-semibold text-slate-700">Mohammad Trihatmodjo</span> copyright 2026
+                </p>
+            </footer>
+
+        </div>
+
+    </div>
+
+    <script>
+        const { createApp } = Vue;
+
+        createApp({
+            data() {
+                const today = new Date().toISOString().split('T')[0];
+                const month = today.substring(0, 7);
+
+                const daftarMapel = [
+                    'Bahasa Indonesia', 'Bahasa Inggris', 'Pendidikan Pancasila', 
+                    'Matematika', 'IPA', 'IPS', 'PKPBI', 'Seni Budaya'
+                ];
+
+                return {
+                    isLoggedIn: false,
+                    currentUsername: '',
+                    loginUsername: '',
+                    loginPin: '',
+                    loginError: '',
+
+                    activeTab: 'absensi_harian',
+                    selectedDateAbsensi: today,
+                    selectedDateJurnal: today,
+                    selectedDateCekJurnal: today,
+                    selectedMonth: month,
+                    selectedMonthJurnal: month,
+                    selectedMapelJurnal: 'SEMUA',
+                    selectedSemesterNilai: '1',
+                    selectedMapelNilai: daftarMapel[0],
+                    selectedMapelByDate: {},
+                    muridData: [],
+                    formSiswa: { id: null, nama: '', nis: '', nisn: '', isEdit: false },
+                    daftarMapel: daftarMapel,
+                    absensiData: {},
+                    jurnalData: {},
+                    nilaiData: {},
+                    editingJurnalKeys: [],
+                    profilGuru: {
+                        nama: '',
+                        nip: '',
+                        jabatan: 'Guru Kelas',
+                        kota: 'Semarang',
+                        ttdUrl: ''
+                    }
+                }
+            },
+            computed: {
+                formattedTodayDate() {
+                    const options = { year: 'numeric', month: 'long', day: 'numeric' };
+                    return new Date().toLocaleDateString('id-ID', options);
+                },
+                selectedMapelHariIni() {
+                    return this.selectedMapelByDate[this.selectedDateJurnal] || [];
+                },
+                daftarJurnalHariIni() {
+                    let result = [];
+                    const mapelTerpilih = this.selectedMapelByDate[this.selectedDateCekJurnal] || [];
+                    mapelTerpilih.forEach(mapel => {
+                        const entry = this.getJurnal(this.selectedDateCekJurnal, mapel);
+                        if (entry && (entry.tp || entry.materi)) {
+                            result.push({
+                                mapel: mapel,
+                                tp: entry.tp,
+                                materi: entry.materi
+                            });
+                        }
+                    });
+                    return result;
+                },
+                daysInMonth() {
+                    const parts = this.selectedMonth.split('-');
+                    const year = parseInt(parts[0]);
+                    const month = parseInt(parts[1]);
+                    const totalDays = new Date(year, month, 0).getDate();
+                    return Array.from({ length: totalDays }, (_, i) => i + 1);
+                },
+                daftarJurnalBulanan() {
+                    let result = [];
+                    Object.keys(this.jurnalData).forEach(dateStr => {
+                        if (dateStr.startsWith(this.selectedMonthJurnal)) {
+                            const mapelTerpilihHariIni = this.selectedMapelByDate[dateStr] || [];
+                            mapelTerpilihHariIni.forEach(mapel => {
+                                if (this.selectedMapelJurnal === 'SEMUA' || this.selectedMapelJurnal === mapel) {
+                                    const entry = this.jurnalData[dateStr][mapel];
+                                    if (entry && (entry.tp || entry.materi)) {
+                                        result.push({
+                                            tanggal: dateStr,
+                                            mapel: mapel,
+                                            tp: entry.tp,
+                                            materi: entry.materi
+                                        });
+                                    }
+                                }
+                            });
+                        }
+                    });
+                    return result.sort((a,b) => a.tanggal.localeCompare(b.tanggal));
+                }
+            },
+            methods: {
+                getStorageKey(prefix) {
+                    return `${prefix}_${this.currentUsername.toLowerCase().trim().replace(/\s+/g, '_')}`;
+                },
+                login() {
+                    if (this.loginPin === '2233') {
+                        const sanitizedUser = this.loginUsername.trim();
+                        if (sanitizedUser !== '') {
+                            this.currentUsername = sanitizedUser;
+                            this.loadUserData();
+                            this.isLoggedIn = true;
+                            this.loginError = '';
+                            this.loginPin = '';
+                        }
+                    } else {
+                        this.loginError = 'PIN salah! PIN default adalah 2233.';
+                    }
+                },
+                logout() {
+                    this.isLoggedIn = false;
+                    this.currentUsername = '';
+                    this.absensiData = {};
+                    this.jurnalData = {};
+                    this.selectedMapelByDate = {};
+                    this.nilaiData = {};
+                    this.muridData = [];
+                },
+                loadUserData(showNotice = false) {
+                    const absensiSaved = localStorage.getItem(this.getStorageKey('absensiData'));
+                    this.absensiData = absensiSaved ? JSON.parse(absensiSaved) : {};
+
+                    const jurnalSaved = localStorage.getItem(this.getStorageKey('jurnalData'));
+                    this.jurnalData = jurnalSaved ? JSON.parse(jurnalSaved) : {};
+
+                    const nilaiSaved = localStorage.getItem(this.getStorageKey('nilaiData'));
+                    this.nilaiData = nilaiSaved ? JSON.parse(nilaiSaved) : {};
+
+                    const mapelSaved = localStorage.getItem(this.getStorageKey('selectedMapelByDate'));
+                    this.selectedMapelByDate = mapelSaved ? JSON.parse(mapelSaved) : {};
+
+                    const muridSaved = localStorage.getItem(this.getStorageKey('muridData'));
+                    this.muridData = muridSaved ? JSON.parse(muridSaved) : [];
+
+                    const profilSaved = localStorage.getItem(this.getStorageKey('profilGuru'));
+                    if (profilSaved) {
+                        this.profilGuru = JSON.parse(profilSaved);
+                    } else {
+                        this.profilGuru = {
+                            nama: this.currentUsername,
+                            nip: '',
+                            jabatan: 'Guru Kelas',
+                            kota: 'Semarang',
+                            ttdUrl: ''
+                        };
+                        this.simpanProfil();
+                    }
+
+                    if(showNotice) {
+                        alert("🔄 Data berhasil diperbarui!");
+                    }
+                },
+                simpanSiswa() {
+                    if (!this.formSiswa.nama.trim()) {
+                        alert("Nama siswa wajib diisi!");
+                        return;
+                    }
+                    if (this.formSiswa.isEdit) {
+                        const index = this.muridData.findIndex(s => s.id === this.formSiswa.id);
+                        if (index !== -1) {
+                            this.muridData[index].nama = this.formSiswa.nama;
+                            this.muridData[index].nis = this.formSiswa.nis;
+                            this.muridData[index].nisn = this.formSiswa.nisn;
+                        }
+                    } else {
+                        const newId = this.muridData.length > 0 ? Math.max(...this.muridData.map(s => s.id)) + 1 : 1;
+                        this.muridData.push({
+                            id: newId,
+                            nama: this.formSiswa.nama,
+                            nis: this.formSiswa.nis,
+                            nisn: this.formSiswa.nisn
+                        });
+                    }
+                    localStorage.setItem(this.getStorageKey('muridData'), JSON.stringify(this.muridData));
+                    this.resetFormSiswa();
+                    alert("Data siswa berhasil disimpan!");
+                },
+                editSiswa(siswa) {
+                    this.formSiswa = { ...siswa, isEdit: true };
+                },
+                hapusSiswa(id) {
+                    if (confirm("Yakin ingin menghapus siswa ini?")) {
+                        this.muridData = this.muridData.filter(s => s.id !== id);
+                        localStorage.setItem(this.getStorageKey('muridData'), JSON.stringify(this.muridData));
+                    }
+                },
+                resetFormSiswa() {
+                    this.formSiswa = { id: null, nama: '', nis: '', nisn: '', isEdit: false };
+                },
+                hitungRataUH(muridId) {
+                    const n = this.getNilai(muridId);
+                    let sum = 0; let count = 0;
+                    ['uh1', 'uh2', 'uh3', 'uh4', 'uh5'].forEach(key => {
+                        if (n[key] !== '' && n[key] !== null && n[key] !== undefined) {
+                            sum += parseFloat(n[key]);
+                            count++;
+                        }
+                    });
+                    if (count === 0) return '-';
+                    return Math.round(sum / count);
+                },
+                hitungNilaiAkhir(muridId) {
+                    const n = this.getNilai(muridId);
+                    const rataUH = this.hitungRataUH(muridId);
+                    const sts = n.sts !== '' && n.sts !== null && n.sts !== undefined ? parseFloat(n.sts) : 0;
+                    const sumatifAkhir = this.selectedSemesterNilai === '1' ? 
+                                        (n.sas !== '' && n.sas !== null && n.sas !== undefined ? parseFloat(n.sas) : 0) : 
+                                        (n.asaj !== '' && n.asaj !== null && n.asaj !== undefined ? parseFloat(n.asaj) : 0);
+                    
+                    let divider = 0;
+                    let total = 0;
+                    if (rataUH !== '-') { total += parseFloat(rataUH); divider++; }
+                    if (sts > 0) { total += sts; divider++; }
+                    if (sumatifAkhir > 0) { total += sumatifAkhir; divider++; }
+
+                    if (divider === 0) return '-';
+                    return Math.round(total / divider);
+                },
+                formatBulanTahun(YYYYMM) {
+                    if(!YYYYMM) return '';
+                    const [year, month] = YYYYMM.split('-');
+                    const date = new Date(year, parseInt(month)-1, 1);
+                    return date.toLocaleDateString('id-ID', { month: 'long', year: 'numeric' });
+                },
+                formattedDate(dateStr) {
+                    if(!dateStr) return '';
+                    const options = { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' };
+                    return new Date(dateStr).toLocaleDateString('id-ID', options);
+                },
+                getAbsensi(dateStr, muridId) {
+                    if (!this.absensiData[dateStr]) this.absensiData[dateStr] = {};
+                    if (!this.absensiData[dateStr][muridId]) {
+                        this.absensiData[dateStr][muridId] = { status: 'H', catatan: '' };
+                    }
+                    return this.absensiData[dateStr][muridId];
+                },
+                simpanPresensi() {
+                    localStorage.setItem(this.getStorageKey('absensiData'), JSON.stringify(this.absensiData));
+                    alert("🟢 Presensi harian tanggal " + this.selectedDateAbsensi + " berhasil disimpan!");
+                },
+                getJurnal(dateStr, mapel) {
+                    if (!this.jurnalData[dateStr]) this.jurnalData[dateStr] = {};
+                    if (!this.jurnalData[dateStr][mapel]) {
+                        this.jurnalData[dateStr][mapel] = { tp: '', materi: '' };
+                    }
+                    return this.jurnalData[dateStr][mapel];
+                },
+                isMapelSelected(mapel) {
+                    return this.selectedMapelHariIni.includes(mapel);
+                },
+                toggleMapelSelection(mapel) {
+                    if (!this.selectedMapelByDate[this.selectedDateJurnal]) {
+                        this.selectedMapelByDate[this.selectedDateJurnal] = [];
+                    }
+                    const list = this.selectedMapelByDate[this.selectedDateJurnal];
+                    const index = list.indexOf(mapel);
+                    if (index > -1) {
+                        const existingData = this.jurnalData[this.selectedDateJurnal] && this.jurnalData[this.selectedDateJurnal][mapel];
+                        if (existingData && (existingData.tp || existingData.materi)) {
+                            alert("Data jurnal sudah terisi! Silakan klik tombol '🗑️ Hapus Jurnal' jika ingin menghapusnya secara permanen.");
+                            return;
+                        }
+                        this.hapusJurnal(mapel, false, this.selectedDateJurnal);
+                    } else {
+                        list.push(mapel);
+                    }
+                    localStorage.setItem(this.getStorageKey('selectedMapelByDate'), JSON.stringify(this.selectedMapelByDate));
+                },
+                hapusJurnal(mapel, confirmDelete = true, dateStr = this.selectedDateJurnal) {
+                    if (confirmDelete && !confirm(`Yakin ingin menghapus jurnal mata pelajaran ${mapel} pada tanggal ${dateStr} secara permanen?`)) {
+                        return;
+                    }
+                    const list = this.selectedMapelByDate[dateStr];
+                    if (list) {
+                        const index = list.indexOf(mapel);
+                        if (index > -1) list.splice(index, 1);
+                    }
+                    if (this.jurnalData[dateStr] && this.jurnalData[dateStr][mapel]) {
+                        delete this.jurnalData[dateStr][mapel];
+                    }
+                    localStorage.setItem(this.getStorageKey('selectedMapelByDate'), JSON.stringify(this.selectedMapelByDate));
+                    localStorage.setItem(this.getStorageKey('jurnalData'), JSON.stringify(this.jurnalData));
+                },
+                jurnalIsFilled(dateStr, mapel) {
+                    const data = this.jurnalData[dateStr] && this.jurnalData[dateStr][mapel];
+                    return data && (data.tp.trim() !== '' || data.materi.trim() !== '');
+                },
+                isEditingJurnal(mapel) {
+                    if (!this.jurnalIsFilled(this.selectedDateJurnal, mapel)) return true;
+                    return this.editingJurnalKeys.includes(`${this.selectedDateJurnal}_${mapel}`);
+                },
+                setEditingJurnal(mapel, isEditing) {
+                    const key = `${this.selectedDateJurnal}_${mapel}`;
+                    if (isEditing) {
+                        if (!this.editingJurnalKeys.includes(key)) this.editingJurnalKeys.push(key);
+                    } else {
+                        const idx = this.editingJurnalKeys.indexOf(key);
+                        if (idx > -1) this.editingJurnalKeys.splice(idx, 1);
+                    }
+                },
+                simpanJurnal() {
+                    localStorage.setItem(this.getStorageKey('jurnalData'), JSON.stringify(this.jurnalData));
+                    localStorage.setItem(this.getStorageKey('selectedMapelByDate'), JSON.stringify(this.selectedMapelByDate));
+                    this.editingJurnalKeys = [];
+                    alert("📖 Jurnal mengajar tanggal " + this.selectedDateJurnal + " berhasil disimpan!");
+                },
+                getNilai(muridId) {
+                    if (!this.nilaiData[this.selectedSemesterNilai]) {
+                        this.nilaiData[this.selectedSemesterNilai] = {};
+                    }
+                    if (!this.nilaiData[this.selectedSemesterNilai][this.selectedMapelNilai]) {
+                        this.nilaiData[this.selectedSemesterNilai][this.selectedMapelNilai] = {};
+                    }
+                    if (!this.nilaiData[this.selectedSemesterNilai][this.selectedMapelNilai][muridId]) {
+                        this.nilaiData[this.selectedSemesterNilai][this.selectedMapelNilai][muridId] = { uh1: '', uh2: '', uh3: '', uh4: '', uh5: '', sts: '', sas: '', asaj: '' };
+                    }
+                    return this.nilaiData[this.selectedSemesterNilai][this.selectedMapelNilai][muridId];
+                },
+                simpanNilai() {
+                    localStorage.setItem(this.getStorageKey('nilaiData'), JSON.stringify(this.nilaiData));
+                    alert(`📝 Nilai ${this.selectedMapelNilai} Semester ${this.selectedSemesterNilai} berhasil disimpan!`);
+                },
+                simpanProfil() {
+                    localStorage.setItem(this.getStorageKey('profilGuru'), JSON.stringify(this.profilGuru));
+                },
+                getStatusByDay(day, muridId) {
+                    const dayFormatted = day < 10 ? '0' + day : day;
+                    const dateStr = `${this.selectedMonth}-${dayFormatted}`;
+                    if (this.absensiData[dateStr] && this.absensiData[dateStr][muridId]) {
+                        return this.absensiData[dateStr][muridId].status;
+                    }
+                    return '-';
+                },
+                hitungTotalSiswa(muridId, status) {
+                    let count = 0;
+                    this.daysInMonth.forEach(day => {
+                        if (this.getStatusByDay(day, muridId) === status) {
+                            count++;
+                        }
+                    });
+                    return count;
+                },
+                uploadTTD(event) {
+                    const file = event.target.files[0];
+                    if (file) {
+                        const reader = new FileReader();
+                        reader.onload = (e) => {
+                            this.profilGuru.ttdUrl = e.target.result;
+                            this.simpanProfil();
+                        };
+                        reader.readAsDataURL(file);
+                    }
+                },
+                exportToExcel() {
+                    let dataToExport = [];
+                    let filename = `Laporan_${this.activeTab}_${this.currentUsername}.xlsx`;
+                    let colWidths = [];
+
+                    if (this.activeTab === 'absensi_harian') {
+                        dataToExport = this.muridData.map(m => ({
+                            "Tanggal": this.selectedDateAbsensi,
+                            "Nama Siswa": m.nama,
+                            "Kehadiran": this.getAbsensi(this.selectedDateAbsensi, m.id).status,
+                            "Catatan": this.getAbsensi(this.selectedDateAbsensi, m.id).catatan
+                        }));
+                        colWidths = [{ wch: 15 }, { wch: 30 }, { wch: 15 }, { wch: 35 }];
+                    } else if (this.activeTab === 'rekap_absensi') {
+                        dataToExport = this.muridData.map(m => ({
+                            "Nama Siswa": m.nama,
+                            "NIS": m.nis || '-',
+                            "NISN": m.nisn || '-',
+                            "Hadir (H)": this.hitungTotalSiswa(m.id, 'H'),
+                            "Sakit (S)": this.hitungTotalSiswa(m.id, 'S'),
+                            "Izin (I)": this.hitungTotalSiswa(m.id, 'I'),
+                            "Alpa (A)": this.hitungTotalSiswa(m.id, 'A')
+                        }));
+                        colWidths = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
+                    } else if (this.activeTab === 'rekap_jurnal' || this.activeTab === 'jurnal_cek') {
+                        dataToExport = this.daftarJurnalBulanan;
+                        colWidths = [{ wch: 15 }, { wch: 25 }, { wch: 40 }, { wch: 40 }];
+                    } else if (this.activeTab === 'input_nilai') {
+                        dataToExport = this.muridData.map(m => {
+                            const nilai = this.getNilai(m.id);
+                            let row = {
+                                "Nama Siswa": m.nama,
+                                "NIS": m.nis || '-',
+                                "UH 1": nilai.uh1,
+                                "UH 2": nilai.uh2,
+                                "UH 3": nilai.uh3,
+                                "UH 4": nilai.uh4,
+                                "UH 5": nilai.uh5,
+                                "Rata UH": this.hitungRataUH(m.id),
+                                "STS": nilai.sts
+                            };
+                            if (this.selectedSemesterNilai === '1') {
+                                row["SAS"] = nilai.sas;
+                            } else {
+                                row["ASAJ"] = nilai.asaj;
+                            }
+                            row["Nilai Akhir"] = this.hitungNilaiAkhir(m.id);
+                            return row;
+                        });
+                        filename = `Nilai_${this.selectedMapelNilai}_SMT${this.selectedSemesterNilai}_${this.currentUsername}.xlsx`;
+                        colWidths = [{ wch: 30 }, { wch: 15 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 8 }, { wch: 10 }, { wch: 8 }, { wch: 8 }, { wch: 12 }];
+                    } else {
+                        alert("Silakan buka tab Cek Jurnal, Presensi, Rekap Bulanan, atau Input Nilai untuk ekspor Excel!");
+                        return;
+                    }
+
+                    const worksheet = XLSX.utils.json_to_sheet(dataToExport);
+
+                    const ttdRows = [
+                        [],
+                        [],
+                        ["", "", `${this.profilGuru.kota}, ${this.formattedTodayDate}`],
+                        ["", "", this.profilGuru.jabatan],
+                        [],
+                        [],
+                        ["", "", this.profilGuru.nama],
+                        ["", "", `NIP. ${this.profilGuru.nip || '-'}`]
+                    ];
+                    XLSX.utils.sheet_add_aoa(worksheet, ttdRows, { origin: -1 });
+
+                    worksheet['!cols'] = colWidths;
+
+                    const workbook = XLSX.utils.book_new();
+                    XLSX.utils.book_append_sheet(workbook, worksheet, "Laporan");
+                    XLSX.writeFile(workbook, filename);
+                },
+                exportToPDF() {
+                    const element = document.getElementById('printable-content');
+                    const isLandscape = this.activeTab.includes('rekap') || this.activeTab === 'input_nilai';
+
+                    // Backup original styles
+                    const originalWidth = element.style.width;
+                    const overflowElements = element.querySelectorAll('.overflow-x-auto');
+                    
+                    // Remove overflow so tables render fully
+                    overflowElements.forEach(el => {
+                        el.classList.remove('overflow-x-auto');
+                        el.style.overflow = 'visible';
+                    });
+
+                    // Force a minimum width to prevent UI from squishing or cutting off
+                    if (isLandscape) {
+                        element.style.width = '1400px'; 
+                    } else {
+                        element.style.width = '900px';
+                    }
+
+                    const opt = {
+                        margin:       0.4,
+                        filename:     `Dokumen_${this.activeTab}_${this.currentUsername}.pdf`,
+                        image:        { type: 'jpeg', quality: 0.98 },
+                        html2canvas:  { scale: 2, useCORS: true },
+                        jsPDF:        { unit: 'in', format: 'legal', orientation: isLandscape ? 'landscape' : 'portrait' }
+                    };
+                    
+                    html2pdf().set(opt).from(element).save().then(() => {
+                        // Restore original styles
+                        element.style.width = originalWidth;
+                        overflowElements.forEach(el => {
+                            el.classList.add('overflow-x-auto');
+                            el.style.overflow = '';
+                        });
+                    });
+                },
+                printDocument() {
+                    const isLandscape = this.activeTab.includes('rekap') || this.activeTab === 'input_nilai';
+                    const style = document.createElement('style');
+                    style.innerHTML = `@page { size: ${isLandscape ? 'landscape' : 'portrait'}; margin: 0; }`;
+                    document.head.appendChild(style);
+
+                    window.print();
+                    
+                    setTimeout(() => {
+                        document.head.removeChild(style);
+                    }, 1000);
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
