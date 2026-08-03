@@ -37,6 +37,7 @@
             thead { display: table-header-group; }
             tfoot { display: table-footer-group; }
             .overflow-x-auto { overflow: visible !important; }
+            /* Sembunyikan elemen input/dropdown agar rapi atau tampilkan seperlunya */
         }
     </style>
 </head>
@@ -48,9 +49,12 @@
         <div v-if="!isLoggedIn" class="min-h-screen flex items-center justify-center p-4 bg-gradient-to-br from-indigo-900 via-indigo-800 to-slate-900">
             <div class="bg-white p-8 rounded-2xl shadow-2xl w-full max-w-md border border-indigo-100">
                 <div class="text-center mb-6">
-                    <!-- LOGO SEKOLAH (Dukungan format .jpg/.jpeg/.png dengan relative path & fallback) -->
-                    <img src="./logo.jpg" alt="Logo Sekolah" class="w-24 h-24 mx-auto mb-3 object-contain" 
-                         onerror="if (this.src.endsWith('logo.jpg')) { this.src='./logo.png'; } else if (this.src.endsWith('logo.png')) { this.src='./logo.jpeg'; } else { this.onerror=null; this.outerHTML='<div class='w-16 h-16 bg-indigo-100 text-indigo-700 rounded-full flex items-center justify-center mx-auto mb-3 text-2xl font-bold'>👨‍🏫</div>'; }">
+                    <!-- 
+                        GANTI TULISAN 'URL_GAMBAR_LOGO_ANDA' DENGAN NAMA FILE ATAU LINK LOGO ANDA
+                        Contoh jika logo ada di folder yang sama: src="logo.png" 
+                        Contoh jika dari internet: src="https://domain.com/logo.png"
+                    -->
+                    <img src="logo.png" alt="Logo" class="w-24 h-24 mx-auto mb-3 object-contain">
                     <h1 class="text-2xl font-bold text-slate-800">Administrasi Kelas Digital</h1>
                     <p class="text-sm text-indigo-600 font-semibold mt-1"></p>
                 </div>
@@ -176,7 +180,10 @@
                         </table>
                     </div>
 
-                    <div class="flex justify-end pt-2 border-t">
+                    <div class="flex justify-end gap-2 pt-2 border-t">
+                        <button @click="hapusPresensi" class="bg-rose-600 hover:bg-rose-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
+                            🗑️ Hapus Presensi
+                        </button>
                         <button @click="simpanPresensi" class="bg-emerald-600 hover:bg-emerald-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
                             💾 Simpan Presensi Hari Ini
                         </button>
@@ -801,8 +808,14 @@
                     let divider = 0;
                     let total = 0;
                     if (rataUH !== '-') { total += parseFloat(rataUH); divider++; }
-                    if (sts > 0) { total += sts; divider++; }
-                    if (sumatifAkhir > 0) { total += sumatifAkhir; divider++; }
+                    
+                    const isStsFilled = n.sts !== '' && n.sts !== null && n.sts !== undefined;
+                    if (isStsFilled) { total += sts; divider++; }
+                    
+                    const isSumatifFilled = this.selectedSemesterNilai === '1' ? 
+                                           (n.sas !== '' && n.sas !== null && n.sas !== undefined) : 
+                                           (n.asaj !== '' && n.asaj !== null && n.asaj !== undefined);
+                    if (isSumatifFilled) { total += sumatifAkhir; divider++; }
 
                     if (divider === 0) return '-';
                     return Math.round(total / divider);
@@ -828,6 +841,17 @@
                 simpanPresensi() {
                     localStorage.setItem(this.getStorageKey('absensiData'), JSON.stringify(this.absensiData));
                     alert("🟢 Presensi harian tanggal " + this.selectedDateAbsensi + " berhasil disimpan!");
+                },
+                hapusPresensi() {
+                    if (confirm(`Yakin ingin menghapus seluruh data presensi pada tanggal ${this.selectedDateAbsensi}?`)) {
+                        if (this.absensiData[this.selectedDateAbsensi]) {
+                            delete this.absensiData[this.selectedDateAbsensi];
+                            localStorage.setItem(this.getStorageKey('absensiData'), JSON.stringify(this.absensiData));
+                            alert(`Data presensi tanggal ${this.selectedDateAbsensi} berhasil dihapus!`);
+                        } else {
+                            alert("Tidak ada data presensi pada tanggal ini.");
+                        }
+                    }
                 },
                 getJurnal(dateStr, mapel) {
                     if (!this.jurnalData[dateStr]) this.jurnalData[dateStr] = {};
@@ -966,7 +990,7 @@
                             "Alpa (A)": this.hitungTotalSiswa(m.id, 'A')
                         }));
                         colWidths = [{ wch: 30 }, { wch: 15 }, { wch: 15 }, { wch: 10 }, { wch: 10 }, { wch: 10 }, { wch: 10 }];
-                    } else if (this.activeTab === 'rekap_jurnal' || this.activeTab === 'jurnal_cek') {
+                    } else if (this.activeTab === 'rekap_jurnal' || this.activeTab === 'jurnal_input') {
                         dataToExport = this.daftarJurnalBulanan;
                         colWidths = [{ wch: 15 }, { wch: 25 }, { wch: 40 }, { wch: 40 }];
                     } else if (this.activeTab === 'input_nilai') {
@@ -1047,29 +1071,4 @@
                         jsPDF:        { unit: 'in', format: 'legal', orientation: isLandscape ? 'landscape' : 'portrait' }
                     };
                     
-                    html2pdf().set(opt).from(element).save().then(() => {
-                        // Restore original styles
-                        element.style.width = originalWidth;
-                        overflowElements.forEach(el => {
-                            el.classList.add('overflow-x-auto');
-                            el.style.overflow = '';
-                        });
-                    });
-                },
-                printDocument() {
-                    const isLandscape = this.activeTab.includes('rekap') || this.activeTab === 'input_nilai';
-                    const style = document.createElement('style');
-                    style.innerHTML = `@page { size: ${isLandscape ? 'landscape' : 'portrait'}; margin: 0; }`;
-                    document.head.appendChild(style);
-
-                    window.print();
-                    
-                    setTimeout(() => {
-                        document.head.removeChild(style);
-                    }, 1000);
-                }
-            }
-        }).mount('#app')
-    </script>
-</body>
-</html>
+                   
