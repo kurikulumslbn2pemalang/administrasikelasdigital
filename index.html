@@ -1071,4 +1071,32 @@
                         jsPDF:        { unit: 'in', format: 'legal', orientation: isLandscape ? 'landscape' : 'portrait' }
                     };
                     
-                   
+                    html2pdf().set(opt).from(element).save().then(() => {
+                        // Restore original styles
+                        element.style.width = originalWidth;
+                        overflowElements.forEach(el => {
+                            el.classList.add('overflow-x-auto');
+                            el.style.overflow = '';
+                        });
+                    });
+                },
+                printDocument() {
+                    // Coba setting ukuran landscape otomatis jika tabel lebar
+                    const isLandscape = this.activeTab.includes('rekap') || this.activeTab === 'input_nilai';
+                    const style = document.createElement('style');
+                    style.innerHTML = `@page { size: ${isLandscape ? 'landscape' : 'portrait'}; margin: 0; }`;
+                    document.head.appendChild(style);
+
+                    
+                    window.print();
+                    
+                    // Cleanup style
+                    setTimeout(() => {
+                        document.head.removeChild(style);
+                    }, 1000);
+                }
+            }
+        }).mount('#app')
+    </script>
+</body>
+</html>
