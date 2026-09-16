@@ -328,7 +328,20 @@
                         </div>
 
                         <div v-if="selectedMapelHariIni.length === 0" class="p-8 text-center border-2 border-dashed border-slate-300 rounded-xl bg-slate-50 text-slate-500 print:hidden">
-                            <p class="font-semibold">Klik Mapel di atas untuk mulai mengisi atau melihat jurnal hari ini.</p>
+                            <p class="font-semibold">Jadwal kosong. Tambahkan mapel di bawah ini untuk mulai mengisi jurnal.</p>
+                        </div>
+
+                        <div class="mt-4 flex flex-wrap items-center gap-2 print:hidden p-4 bg-indigo-50 rounded-xl border border-indigo-100 justify-between">
+                            <div class="flex items-center gap-3 w-full md:w-auto">
+                                <span class="text-sm font-bold text-slate-700 whitespace-nowrap">Materi Tambahan:</span>
+                                <select v-model="mapelTambahan" class="border border-slate-300 rounded p-2 text-sm bg-white flex-grow md:w-48 outline-none focus:ring-2 focus:ring-indigo-500">
+                                    <option value="">-- Pilih Mapel --</option>
+                                    <option v-for="m in daftarMapel" :key="m" :value="m">{{ m }}</option>
+                                </select>
+                            </div>
+                            <button @click="tambahMapelJurnal" class="bg-blue-600 hover:bg-blue-700 text-white font-bold px-4 py-2 rounded-lg shadow-md transition text-sm flex items-center gap-1 w-full md:w-auto justify-center">
+                                ➕ Tambah ke Jurnal
+                            </button>
                         </div>
 
                         <div v-else class="flex justify-end pt-2 print:hidden">
@@ -363,15 +376,32 @@
                     <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
                         <div v-for="(mapels, hari) in jadwalPelajaran" :key="hari" class="bg-white border border-slate-200 rounded-xl shadow-sm p-4">
                             <h3 class="font-bold text-lg text-indigo-900 border-b pb-2 mb-3 text-center">{{ hari }}</h3>
-                            <div class="flex flex-wrap gap-2 justify-center">
-                                <button v-for="mapel in daftarMapel" :key="mapel" @click="toggleMapelJadwal(hari, mapel)"
-                                    :class="jadwalPelajaran[hari].includes(mapel) ? 'bg-indigo-600 text-white font-bold shadow' : 'bg-slate-50 text-slate-600 border hover:bg-slate-100'"
-                                    class="px-3 py-1.5 rounded-lg text-xs transition flex items-center gap-1">
-                                    <span>{{ jadwalPelajaran[hari].includes(mapel) ? '✓' : '+' }}</span>
-                                    <span>{{ mapel }}</span>
-                                </button>
+                            <div class="flex flex-col gap-3 justify-center">
+                                <div class="flex flex-wrap gap-2 justify-center min-h-[30px]">
+                                    <div v-for="mapel in jadwalPelajaran[hari]" :key="mapel" class="bg-indigo-100 text-indigo-800 border border-indigo-200 px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1 shadow-sm">
+                                        {{ mapel }}
+                                        <button @click="toggleMapelJadwal(hari, mapel)" class="text-indigo-500 hover:text-rose-600 ml-1 bg-white rounded-full w-4 h-4 flex items-center justify-center font-bold">✕</button>
+                                    </div>
+                                    <div v-if="jadwalPelajaran[hari].length === 0" class="text-xs text-slate-400 italic py-1">Belum ada jadwal</div>
+                                </div>
+                                <select @change="tambahMapelJadwal(hari, $event)" class="border border-slate-300 rounded-lg p-2 text-sm bg-slate-50 text-slate-700 focus:ring-indigo-500 outline-none w-full shadow-sm cursor-pointer mb-2">
+                                    <option value="" disabled selected>➕ Pilih Mapel dari Daftar...</option>
+                                    <option v-for="m in daftarMapel" :key="m" :value="m" :disabled="jadwalPelajaran[hari].includes(m)">
+                                        {{ m }}
+                                    </option>
+                                </select>
+                                <div class="flex gap-2">
+                                    <input type="text" v-model="mapelKustom[hari]" placeholder="Ketik mapel baru..." @keyup.enter="tambahMapelKustomJadwal(hari)" class="border border-slate-300 rounded-lg p-2 text-sm w-full outline-none focus:ring-indigo-500 bg-white">
+                                    <button @click="tambahMapelKustomJadwal(hari)" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3 py-2 rounded-lg font-bold text-xs transition shadow-sm">➕</button>
+                                </div>
                             </div>
                         </div>
+                    </div>
+                    
+                    <div class="mt-6 flex justify-end pt-4 border-t">
+                        <button @click="alertSimpanJadwal" class="bg-indigo-600 hover:bg-indigo-700 text-white font-bold px-6 py-2.5 rounded-lg shadow-md transition flex items-center gap-2">
+                            💾 Simpan Jadwal
+                        </button>
                     </div>
                 </div>
 
@@ -688,7 +718,8 @@
 
                 const daftarMapel = [
                     'Bahasa Indonesia', 'Bahasa Inggris', 'Pendidikan Pancasila', 
-                    'Matematika', 'IPA', 'IPS', 'PKPBI', 'Seni Budaya'
+                    'Matematika', 'IPA', 'IPS', 'PKPBI', 'Seni Budaya',
+                    'Kokurikuler', 'Pramuka', 'Kegiatan Lain-lain'
                 ];
                 
                 const daftarLibur = [
@@ -707,7 +738,6 @@
                     { tanggal: '2026-06-17', nama: 'Hari Raya Idul Adha' },
                     { tanggal: '2026-07-07', nama: 'Tahun Baru Islam' },
                     { tanggal: '2026-08-17', nama: 'Hari Kemerdekaan RI' },
-                    { tanggal: '2026-09-16', nama: 'Maulid Nabi Muhammad SAW' },
                     { tanggal: '2026-12-25', nama: 'Hari Raya Natal' }
                 ];
 
@@ -729,6 +759,7 @@
                     selectedMapelJurnal: 'SEMUA',
                     selectedSemesterNilai: '1',
                     selectedMapelNilai: daftarMapel[0],
+                    mapelTambahan: '',
                     selectedMapelByDate: {},
                     muridData: [],
                     formSiswa: { id: null, nama: '', nis: '', nisn: '', isEdit: false },
@@ -752,6 +783,13 @@
                         'Rabu': [],
                         'Kamis': [],
                         'Jumat': []
+                    },
+                    mapelKustom: {
+                        'Senin': '',
+                        'Selasa': '',
+                        'Rabu': '',
+                        'Kamis': '',
+                        'Jumat': ''
                     }
                 }
             },
@@ -844,7 +882,7 @@
                             this.loginPin = '';
                         }
                     } else {
-                        this.loginError = 'PIN salah! PIN default adalah 2233.';
+                        this.loginError = 'Pin anda Salah, Silahkan Menghubungi Admin';
                     }
                 },
                 setMotivasi() {
@@ -994,6 +1032,44 @@
                         this.jadwalPelajaran[hari].push(mapel);
                     }
                     this.simpanJadwal();
+                },
+                tambahMapelJadwal(hari, event) {
+                    const mapel = event.target.value;
+                    if (mapel && !this.jadwalPelajaran[hari].includes(mapel)) {
+                        this.jadwalPelajaran[hari].push(mapel);
+                        this.simpanJadwal();
+                    }
+                    event.target.value = "";
+                },
+                tambahMapelKustomJadwal(hari) {
+                    const mapel = this.mapelKustom[hari].trim();
+                    if (mapel && !this.jadwalPelajaran[hari].includes(mapel)) {
+                        this.jadwalPelajaran[hari].push(mapel);
+                        this.simpanJadwal();
+                        this.mapelKustom[hari] = '';
+                    } else if (mapel) {
+                        alert("Mapel ini sudah ada di jadwal hari tersebut.");
+                    }
+                },
+                alertSimpanJadwal() {
+                    this.simpanJadwal();
+                    alert("💾 Jadwal pelajaran berhasil disimpan!");
+                },
+                tambahMapelJurnal() {
+                    if (this.mapelTambahan) {
+                        if (!this.selectedMapelByDate[this.selectedDateJurnal]) {
+                            this.selectedMapelByDate[this.selectedDateJurnal] = [];
+                        }
+                        if (!this.selectedMapelByDate[this.selectedDateJurnal].includes(this.mapelTambahan)) {
+                            this.selectedMapelByDate[this.selectedDateJurnal].push(this.mapelTambahan);
+                            localStorage.setItem(this.getStorageKey('selectedMapelByDate'), JSON.stringify(this.selectedMapelByDate));
+                        } else {
+                            alert("Mapel ini sudah ada di jurnal hari ini.");
+                        }
+                        this.mapelTambahan = '';
+                    } else {
+                        alert("Pilih mapel terlebih dahulu.");
+                    }
                 },
                 simpanJadwal() {
                     localStorage.setItem(this.getStorageKey('jadwalPelajaran'), JSON.stringify(this.jadwalPelajaran));
