@@ -423,11 +423,11 @@
                                     <th class="p-2 border" rowspan="2">No</th>
                                     <th class="p-2 border" rowspan="2">Nama Siswa</th>
                                     <th class="p-2 border" rowspan="2">NIS/NISN</th>
-                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d">{{ d }}</th>
+                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d" :class="isDayHoliday(d) ? 'text-rose-600 bg-rose-50' : ''">{{ d }}</th>
                                     <th class="p-1 border bg-emerald-100" colspan="4">Total</th>
                                 </tr>
                                 <tr class="bg-slate-50 text-center">
-                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d"></th>
+                                    <th class="p-1 border" v-for="d in daysInMonth" :key="d" :class="isDayHoliday(d) ? 'bg-rose-50' : ''"></th>
                                     <th class="p-1 border bg-emerald-50">H</th>
                                     <th class="p-1 border bg-blue-50">S</th>
                                     <th class="p-1 border bg-yellow-50">I</th>
@@ -439,8 +439,8 @@
                                     <td class="p-2 border font-medium">{{ idx + 1 }}</td>
                                     <td class="p-2 border text-left font-semibold text-slate-800">{{ siswa.nama }}</td>
                                     <td class="p-2 border text-left text-[10px] text-slate-500">{{ siswa.nis || '-' }} / {{ siswa.nisn || '-' }}</td>
-                                    <td v-for="d in daysInMonth" :key="d" class="p-1 border">
-                                        {{ getStatusByDay(d, siswa.id) }}
+                                    <td v-for="d in daysInMonth" :key="d" class="border" :class="getDisplayStatusByDay(d, siswa.id) === 'Libur' ? 'bg-rose-100 text-rose-700 text-[9px] font-bold tracking-tighter' : (getDisplayStatusByDay(d, siswa.id) === 'A' ? 'text-red-600 font-bold bg-red-50 p-1' : (getDisplayStatusByDay(d, siswa.id) === '.' ? 'text-xl font-bold p-1 leading-none' : 'p-1 font-semibold'))">
+                                        {{ getDisplayStatusByDay(d, siswa.id) }}
                                     </td>
                                     <td class="p-1 border font-bold text-emerald-700 bg-emerald-50">{{ hitungTotalSiswa(siswa.id, 'H') }}</td>
                                     <td class="p-1 border font-bold text-blue-700 bg-blue-50">{{ hitungTotalSiswa(siswa.id, 'S') }}</td>
@@ -1240,13 +1240,27 @@
                 simpanProfil() {
                     localStorage.setItem(this.getStorageKey('profilGuru'), JSON.stringify(this.profilGuru));
                 },
+                isDayHoliday(day) {
+                    const dayFormatted = day < 10 ? '0' + day : day;
+                    const dateStr = `${this.selectedMonth}-${dayFormatted}`;
+                    return this.isHolidayOrWeekend(dateStr);
+                },
                 getStatusByDay(day, muridId) {
                     const dayFormatted = day < 10 ? '0' + day : day;
                     const dateStr = `${this.selectedMonth}-${dayFormatted}`;
+                    let status = '-';
                     if (this.absensiData[dateStr] && this.absensiData[dateStr][muridId]) {
-                        return this.absensiData[dateStr][muridId].status;
+                        status = this.absensiData[dateStr][muridId].status;
+                    } else if (this.isHolidayOrWeekend(dateStr)) {
+                        status = 'OFF';
                     }
-                    return '-';
+                    if (status === 'OFF') return 'Libur';
+                    return status;
+                },
+                getDisplayStatusByDay(day, muridId) {
+                    const status = this.getStatusByDay(day, muridId);
+                    if (status === 'H') return '.';
+                    return status;
                 },
                 hitungTotalSiswa(muridId, status) {
                     let count = 0;
